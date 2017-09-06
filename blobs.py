@@ -6,13 +6,13 @@ blobs = []
 foods = []
 disease_regions = []
 
-COLOR_RED = "#ef3300" #maybe make outlines a lighter version to make them look blobbier?
-COLOR_BLUE = "0033ef"
-COLOR_YELLOW = "333300"
+COLOR_RED = "#ef0000" #maybe make outlines a lighter version to make them look blobbier?
+COLOR_BLUE = "#0000ef"
+COLOR_YELLOW = "#efef00"
 
-COLOR_ORANGE = "#aa7700"
-COLOR_GREEN = "#11ee44"
-COLOR_PURPLE = "#990099"
+COLOR_ORANGE = "#ffa500"
+COLOR_GREEN = "#00ef00"
+COLOR_PURPLE = "#ef00ef"
 
 COLOR_DEAD = "#eeddaa"
 
@@ -23,17 +23,20 @@ FOOD_LOCATING_RAD = 30
 MIN_SIZE_TO_SPLIT = 20 #maybe won't include?
 CHANCE_SPLIT = 0.01
 
-MAX_AGE = 1000
-STARVE_TIME = 100
+MAX_AGE = 10000
+STARVE_TIME = 1000
 
-DENSITY = 1
+DENSITY = 0.05 #will probably be set to ~0.5
 
 SCREEN_SIZE = 800
 
 CURRENT_DIR_STDEV = 0.2 # standard deviation for change in angle of current each frame (mean is 0)
 CURRENT_STRENGTH_STDEV = 0.2 # standard deviation for change in strength of current each frame (mean is 0)
-C_DIR_TIMER_MEAN = 100 #on average, how often will there be a significant shift in current direction
-C_DIR_TIMER_STDEV = 40 # standard deviation for how often there will be a significant shift in current
+C_DIR_TIMER_MEAN = 500 #on average, how often will there be a significant shift in current direction
+C_DIR_TIMER_STDEV = 100 # standard deviation for how often there will be a significant shift in current
+
+CURRENT_CORRECTION_STDEV = 0.3 #stdev for how much each (inanimate) object will deviate from the calculated value for motion given by the current and its size 
+MV_CURR_POWER = 1.5 #speed from current is proportional to size^x - i thought 2 would make sense at first but it would actually be less due to drag
 
 DECAY_TIME = 400 #avg time for dead blob to decay
 DECAY_STDEV = 100
@@ -50,9 +53,9 @@ DISEASE_LOC_SPREAD_CHANCE = 40 #1/40 chance that the disease location spreads
 COLOR_DISEASE = "#881579"
 DISEASE_FOOD_CHANCE = 100
 
-current = [(0.5-random.random())*0.5, (0.5-random.random())*0.5]
+current = [(0.5-random.random())*5, (0.5-random.random())*5] #doesn't seem to work
 
-c_dir_mean_timer = 0
+c_dir_timer = 0
 
 class Food: #unfinished: deletion
 	def __init__(self, x, y):
@@ -61,6 +64,7 @@ class Food: #unfinished: deletion
 		self.x_speed = 0
 		self.y_speed = 0
 		self.eaten = False
+		self.size = 2
 		if random.randint(0,DISEASE_FOOD_CHANCE) == 1:
 			self.diseased = True
 		else:
@@ -99,18 +103,18 @@ class Disease_Region: #unfinished: color change
                            fill=self.color, outline=self.color) #apparently tkinter doesn't support rgba values... transparency may be hard
 
 class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
-	def __init__(self, x, y, num, diseased, color, size):
+	def __init__(self, x, y, diseased, color, size):
 		self.x = x
 		self.y = y
 		self.x_speed = (0.5-random.random())*0.5
 		self.y_speed = (0.5-random.random())*0.5
-		if size == -1:
-			self.size = random.randint(2,4)
+		if size == "random":
+			self.size = random.randint(3,6) #will shrink later
 		else: 
 			self.size = size
 		self.age = 0
-		self.num = num #index of this blob in game_objects, required to make sure a blob isn't compared to itself? there's probably a better way
-		if color == -1:
+		#self.num = num #index of this blob in game_objects, required to make sure a blob isn't compared to itself? there's probably a better way
+		if color == "random":
 			self.color = random.choice([COLOR_RED, COLOR_BLUE, COLOR_YELLOW])
 		else: 
 			self.color = color
@@ -119,6 +123,8 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 		self.finding_food = -1 #-1 means not finding food, values >= 0 are the index of the food it is finding
 		self.move_period = random.randint(0, 50) #every so often the blob will move itself faster, where in that cycle is it?
 		self.diseased = diseased #disease spreads from food to blob and from blob to blob
+		self.decay_timer = 0
+		self.exists = True
 		#should i have an "exists" field for deletions?
 
 	def find_food(self):
@@ -131,34 +137,35 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 		for food in foods: 
 			if ((food.x-self.x)**2 + (food.y-self.y)**2)**(1/2) <= FOOD_LOCATING_RAD:
 				self.finding_food = i
-				find_food()
+				self.find_food()
 			i += 1
 			# how do i say "if none of the foods are in radius, set self.finding_food = -1"?
 		#else:
 		self.move_period += 1
 		#if self.move_period > MOVE_LENGTH_AVG + random.randint(-MOVE_LENGTH_CORR, MOVE_LENGTH_CORR):
 
-	def collide(self):
+	def collide(self): #something is horribly horribly wrong with this
 		for other in blobs: 
-			if other.num != self.num and other.num != None and self.num != None: #who knows if it will be angered by deleted elements replaced with 0
-				if ((other.x-self.x)**2 + (other.y-self.y)**2)**(1/2) <= other.size + self.size: #if two blobs touch
-					self.x_speed = -self.x_speed
-					self.y_speed = -self.y_speed
-					other.x_speed = -other.x_speed
-					other.y_speed= -other.y_speed
-						
-					if (other.color == COLOR_BLUE and self.color == COLOR_RED) or (other.color == COLOR_RED and self.color == COLOR_BLUE):
-						self.color = COLOR_PURPLE
-						other.color = COLOR_PURPLE
-					elif (other.color == COLOR_RED and self.color == COLOR_YELLOW) or (other.color == COLOR_YELLOW and self.color == COLOR_RED):
-						self.color = COLOR_ORANGE
-						other.color = COLOR_ORANGE
-					elif (other.color == COLOR_BLUE and self.color == COLOR_YELLOW) or (other.color == COLOR_YELLOW and self.color == COLOR_BLUE):
-						self.color = COLOR_GREEN
-						other.color = COLOR_GREEN
-
-					if self.diseased == True and other.diseased == False: 
-						other.diseased = True
+			#if other.num != self.num and other.num != None and self.num != None: #who knows if it will be angered by deleted elements replaced with 0
+				#if ((other.x-self.x)**2 + (other.y-self.y)**2)**(1/2) <= other.size + self.size: #if two blobs touch
+					#could i instead say "if other != self"? then i could ditch num and have no more problems
+			if other != self and other.exists == True and self.exists == True: #this seems to be okay
+				self.x_speed = -self.x_speed
+				self.y_speed = -self.y_speed
+				other.x_speed = -other.x_speed
+				other.y_speed= -other.y_speed
+					
+				if (other.color == COLOR_BLUE and self.color == COLOR_RED) or (other.color == COLOR_RED and self.color == COLOR_BLUE):
+					self.color = COLOR_PURPLE
+					other.color = COLOR_PURPLE
+				elif (other.color == COLOR_RED and self.color == COLOR_YELLOW) or (other.color == COLOR_YELLOW and self.color == COLOR_RED):
+					self.color = COLOR_ORANGE
+					other.color = COLOR_ORANGE
+				elif (other.color == COLOR_BLUE and self.color == COLOR_YELLOW) or (other.color == COLOR_YELLOW and self.color == COLOR_BLUE):
+					self.color = COLOR_GREEN
+					other.color = COLOR_GREEN
+				if self.diseased == True and other.diseased == False: 
+					other.diseased = True
 
 	def die(self):
 		self.dead = True
@@ -168,16 +175,16 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 		self.age += 1
 		self.food_timer+= 1
 		if self.age>MAX_AGE or self.food_timer>STARVE_TIME or (self.diseased == True and random.randint(0,DISEASE_DEATH_CHANCE) == 1):
-			die()
+			self.die()
 
 	def check_split(self):
 		if self.size>=MIN_SIZE_TO_SPLIT and random.random()<CHANCE_SPLIT*(size-MIN_SIZE_TO_SPLIT):
 			self.size /= 2**(1/2)
-			blobs.append(Blob(self.x+random.randint(5,10), self.y+random.randint(5,10), len(blobs), self.diseased, self.color, self.size))
+			blobs.append(Blob(self.x+random.randint(5,10), self.y+random.randint(5,10), self.diseased, self.color, self.size))
 
 	def update_live(self):
-		check_deaths()
-		move_independent()
+		self.check_deaths()
+		self.move_independent()
 
 	def update_dead(self):
 		self.decay_timer+=1
@@ -185,18 +192,19 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 			if self.diseased == True: 
 				disease_regions.append(Disease_Region(self.x, self.y, self.size*DISEASE_LOC_RADIUS_MULT))
 				for i in range(0,2):
-					blobs.append(Blob(self.x+(-1)**i*5), self.y, len(blobs), True, self.color, -1)
-			for i in range(0, size/2):
+					blobs.append(Blob(self.x+(-1)**i*5), self.y, True, self.color, "random")
+			for i in range(0, self.size/2):
 				foods.append(Food(self.x + random.randint(-10, 10), self.y + random.randint(-10, 10))) #decays into food
-			blobs[self.num] = 0 #will this work? i don't want to change the indices of other objects so this may be the best way
+				self.exists = False
+			#blobs[self.num] = 0 #will this work? i don't want to change the indices of other objects so this may be the best way
 
 	def update(self):
 		if self.dead == False:
-			update_live()
-		else:
-			update_dead()
+			self.update_live()
+		elif self.exists == True:
+			self.update_dead()
 		move_current(self, current)
-		collide()
+		self.collide()
 		vel_to_pos(self)
 
 	def draw(self, canvas):
@@ -204,7 +212,9 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
                            fill=self.color, outline=self.color)
 
 def change_current(): 
-	theta = math.atan2(current[0], current[1])
+	global c_dir_timer
+	print(c_dir_timer)
+	theta = math.atan2(current[1], current[0]) #turns out atan2 takes y then x
 	rad = (current[0]**2 + current[1]**2)**(1/2)
 	theta += random.gauss(0, CURRENT_DIR_STDEV)
 	if c_dir_timer >= random.gauss(C_DIR_TIMER_MEAN, C_DIR_TIMER_STDEV): # every so often, shift the average current significantly
@@ -217,12 +227,16 @@ def change_current():
 
 
 def move_current(Object, current):
-	Object.x_speed += current[0]/(DENSITY*Object.size**2)
-	Object.y_speed += current[1]/(DENSITY*Object.size**2)
-	if Object.x>=SCREEN_SIZE or Object.x<=0: 
-		Object.x_speed = 0
-	if Object.y>=SCREEN_SIZE or y<=0: 
-		Object.y_speed = 0
+	Object.x_speed += current[0]/(DENSITY*Object.size**MV_CURR_POWER) + random.gauss(0, CURRENT_CORRECTION_STDEV)
+	Object.y_speed += current[1]/(DENSITY*Object.size**MV_CURR_POWER) + random.gauss(0, CURRENT_CORRECTION_STDEV)
+	if Object.x>=SCREEN_SIZE: #wraps around
+		Object.x = 1
+	if Object.x <= 0: 
+		Object.x = SCREEN_SIZE - 1
+	if Object.y>=SCREEN_SIZE: 
+		Object.y = 1
+	if Object.y <= 0:
+		Object.y = SCREEN_SIZE - 1
 
 def vel_to_pos(Object):
 	Object.x += Object.x_speed
@@ -232,7 +246,7 @@ def vel_to_pos(Object):
 
 def addBlob(event):
 	global blobs
-	blobs.append(Blob(event.x, event.y, len(blobs), False, -1, -1))
+	blobs.append(Blob(event.x, event.y, False, "random", "random"))
 
 def draw(canvas):
 	canvas.delete(Tkinter.ALL)
@@ -241,26 +255,23 @@ def draw(canvas):
 	global disease_regions
 	change_current()
 	for disease_region in disease_regions:
-		disease.region.update()
-		disesase.region.draw()
+		disease_region.update()
+		disesase_region.draw(canvas)
 	for food in foods:
 		food.update()
-		food.draw()
+		food.draw(canvas)
 	for blob in blobs:
 		#print(blob.diseased) #blob.diseased prints correctly so blob is indeed in class Blob
 		blob.update() #it gets angry that "global name 'update_live' is not defined" and idk why
-		blob.draw()
-	
+		blob.draw(canvas)
+	print(current)
 	delay = 33 # milliseconds, so about 30 frames per second	
 	canvas.after(delay, draw, canvas) # call this draw function with the canvas argument again after the delay
-
 if __name__ == "__main__":
 	root = Tkinter.Tk()
 	canvas = Tkinter.Canvas(root, width=SCREEN_SIZE, height=SCREEN_SIZE)
 	canvas.pack()
 
-	root.bind('<Button-1>', addBlob)
-	
+	root.bind('<Button-1>', addBlob) #for some reason, clicking triggers a shift in current direction??
 	draw(canvas)
-	print("help me")
 	root.mainloop()
