@@ -26,14 +26,16 @@ CHANCE_SPLIT = 0.01
 MAX_AGE = 10000
 STARVE_TIME = 1000
 
-DENSITY = 0.05 #will probably be set to ~0.5
+BLOB_DENSITY = 0.05 #will probably be set to ~0.5
+FOOD_DENSITY = 0.5
 
 SCREEN_SIZE = 800
 
-CURRENT_DIR_STDEV = 0.2 # standard deviation for change in angle of current each frame (mean is 0)
+CURRENT_DIR_STDEV = 0.1 # standard deviation for change in angle of current each frame (mean is 0)
 CURRENT_STRENGTH_STDEV = 0.2 # standard deviation for change in strength of current each frame (mean is 0)
-C_DIR_TIMER_MEAN = 500 #on average, how often will there be a significant shift in current direction
-C_DIR_TIMER_STDEV = 100 # standard deviation for how often there will be a significant shift in current
+#going to remove the significant shifts as the other part has it covered
+#C_DIR_TIMER_MEAN = 500 #on average, how often will there be a significant shift in current direction
+#C_DIR_TIMER_STDEV = 100 # standard deviation for how often there will be a significant shift in current
 
 CURRENT_CORRECTION_STDEV = 0.3 #stdev for how much each (inanimate) object will deviate from the calculated value for motion given by the current and its size 
 MV_CURR_POWER = 1.5 #speed from current is proportional to size^x - i thought 2 would make sense at first but it would actually be less due to drag
@@ -53,9 +55,8 @@ DISEASE_LOC_SPREAD_CHANCE = 40 #1/40 chance that the disease location spreads
 COLOR_DISEASE = "#881579"
 DISEASE_FOOD_CHANCE = 100
 
-current = [(0.5-random.random())*5, (0.5-random.random())*5] #doesn't seem to work
+current = [(0.5-random.random())*5, (0.5-random.random())*5]
 
-c_dir_timer = 0
 
 class Food: #unfinished: deletion
 	def __init__(self, x, y):
@@ -65,6 +66,7 @@ class Food: #unfinished: deletion
 		self.y_speed = 0
 		self.eaten = False
 		self.size = 2
+		self.density = FOOD_DENSITY
 		if random.randint(0,DISEASE_FOOD_CHANCE) == 1:
 			self.diseased = True
 		else:
@@ -108,7 +110,7 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 		self.y = y
 		self.x_speed = (0.5-random.random())*0.5
 		self.y_speed = (0.5-random.random())*0.5
-		if size == "random":
+		if size == "random": #size is diameter, not radius
 			self.size = random.randint(3,6) #will shrink later
 		else: 
 			self.size = size
@@ -124,8 +126,8 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 		self.move_period = random.randint(0, 50) #every so often the blob will move itself faster, where in that cycle is it?
 		self.diseased = diseased #disease spreads from food to blob and from blob to blob
 		self.decay_timer = 0
+		self.density = BLOB_DENSITY
 		self.exists = True
-		#should i have an "exists" field for deletions?
 
 	def find_food(self):
 		if foods[self.finding_food].eaten == True:
@@ -146,14 +148,11 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 
 	def collide(self): #something is horribly horribly wrong with this
 		for other in blobs: 
-			#if other.num != self.num and other.num != None and self.num != None: #who knows if it will be angered by deleted elements replaced with 0
-				#if ((other.x-self.x)**2 + (other.y-self.y)**2)**(1/2) <= other.size + self.size: #if two blobs touch
-					#could i instead say "if other != self"? then i could ditch num and have no more problems
-			if other != self and other.exists == True and self.exists == True: #this seems to be okay
-				self.x_speed = -self.x_speed
+			if other != self and other.exists == True and self.exists == True and is_touching(self, other, 0) == True: #this sometimes causes blobs to get stuck in a jittery loop on contact
+				'''self.x_speed = -self.x_speed
 				self.y_speed = -self.y_speed
 				other.x_speed = -other.x_speed
-				other.y_speed= -other.y_speed
+				other.y_speed= -other.y_speed'''
 					
 				if (other.color == COLOR_BLUE and self.color == COLOR_RED) or (other.color == COLOR_RED and self.color == COLOR_BLUE):
 					self.color = COLOR_PURPLE
@@ -166,7 +165,6 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 					other.color = COLOR_GREEN
 				if self.diseased == True and other.diseased == False: 
 					other.diseased = True
-
 	def die(self):
 		self.dead = True
 		self.color = COLOR_DEAD
@@ -210,43 +208,61 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 	def draw(self, canvas):
 		canvas.create_oval(self.x-(self.size/2), self.y-(self.size/2), self.x + self.size/2, self.y + self.size/2,
                            fill=self.color, outline=self.color)
+		#canvas.create_line(300, 300, 300+5*self.x_speed, 300+5*self.y_speed, fill="#000000") #velocity visualizer
 
-def change_current(): 
-	global c_dir_timer
-	print(c_dir_timer)
+def change_current(): #clicking DOES NOT CHANGE the actual current -- it seems to change how blobs (and not foods) respond to it?
+# oh my god clicking isn't even the cause of it
+# it appears that the length mod 2 of the list blobs determines it
+# if it's odd, the blobs move in the direction of the current and if it's even they move in the exact opposite direction
+# as blobs are deleted, the direction shifts without clicking
+# BUT WAIT
+# those blobs don't cease to exist
+# their "exists" field is just set to false so they aren't executing any functions
+# so the direction is somehow determined by how many blobs actually execute the method update/draw/whatever???
+# AAAAAAAAAAAAAAAAaAAA
+
+	#global c_dir_timer
+	#print(c_dir_timer)
 	theta = math.atan2(current[1], current[0]) #turns out atan2 takes y then x
 	rad = (current[0]**2 + current[1]**2)**(1/2)
 	theta += random.gauss(0, CURRENT_DIR_STDEV)
-	if c_dir_timer >= random.gauss(C_DIR_TIMER_MEAN, C_DIR_TIMER_STDEV): # every so often, shift the average current significantly
-		theta += random.random()*6.28
-		c_dir_timer = 0
+	#if c_dir_timer >= random.gauss(C_DIR_TIMER_MEAN, C_DIR_TIMER_STDEV): # every so often, shift the average current significantly
+	#	theta += random.random()*6.28
+	#	c_dir_timer = 0
 	rad += random.gauss(0, CURRENT_STRENGTH_STDEV)
-	c_dir_timer += 1
+	#c_dir_timer += 1
 	current[0] = math.cos(theta)*rad
 	current[1] = math.sin(theta)*rad
 
 
-def move_current(Object, current):
-	Object.x_speed += current[0]/(DENSITY*Object.size**MV_CURR_POWER) + random.gauss(0, CURRENT_CORRECTION_STDEV)
-	Object.y_speed += current[1]/(DENSITY*Object.size**MV_CURR_POWER) + random.gauss(0, CURRENT_CORRECTION_STDEV)
-	if Object.x>=SCREEN_SIZE: #wraps around
-		Object.x = 1
-	if Object.x <= 0: 
-		Object.x = SCREEN_SIZE - 1
-	if Object.y>=SCREEN_SIZE: 
-		Object.y = 1
-	if Object.y <= 0:
-		Object.y = SCREEN_SIZE - 1
+def move_current(object, current):
+	object.x_speed += current[0]/(object.density*object.size**MV_CURR_POWER) + random.gauss(0, CURRENT_CORRECTION_STDEV)
+	object.y_speed += current[1]/(object.density*object.size**MV_CURR_POWER) + random.gauss(0, CURRENT_CORRECTION_STDEV)
+	if object.x>=SCREEN_SIZE: #wraps around
+		object.x = 1
+	if object.x <= 0: 
+		object.x = SCREEN_SIZE - 1
+	if object.y>=SCREEN_SIZE: 
+		object.y = 1
+	if object.y <= 0:
+		object.y = SCREEN_SIZE - 1
 
-def vel_to_pos(Object):
-	Object.x += Object.x_speed
-	Object.y += Object.y_speed
-	Object.x_speed = 0
-	Object.y_speed = 0
+def vel_to_pos(object):
+	object.x += object.x_speed
+	object.y += object.y_speed
+	object.x_speed = 0
+	object.y_speed = 0
+
+def is_touching(object1, object2, pm_radius): #pm_radius is an adjustment to how close the centers of the objects need to be to each other. if it's -1, is_touching will return True if the centers are within object1.size + object2.size - 1 of each other
+	if math.sqrt(pow(object1.x-object2.x, 2) + pow(object1.y-object2.y, 2)) <= 0.5*(object1.size + object2.size) + pm_radius:
+		return True
+	else:
+		return False
 
 def addBlob(event):
 	global blobs
 	blobs.append(Blob(event.x, event.y, False, "random", "random"))
+	print("ADDED")
 
 def draw(canvas):
 	canvas.delete(Tkinter.ALL)
@@ -261,12 +277,18 @@ def draw(canvas):
 		food.update()
 		food.draw(canvas)
 	for blob in blobs:
-		#print(blob.diseased) #blob.diseased prints correctly so blob is indeed in class Blob
-		blob.update() #it gets angry that "global name 'update_live' is not defined" and idk why
-		blob.draw(canvas)
+		if blob.exists == True: #lmao @ efficiency
+			#print(blob.diseased) #blob.diseased prints correctly so blob is indeed in class Blob
+			blob.update()
+			blob.draw(canvas)
 	print(current)
-	delay = 33 # milliseconds, so about 30 frames per second	
+	#these lines show a visualization of the current
+	canvas.create_oval(300 + current[0]*10 - 2, 300 + current[1]*10 - 2, 300+ current[0]*10 + 2, 300 + current[1]*10 + 2, fill="#000000", outline="#ff0000")
+	canvas.create_line(300, 100, 300, 500)
+	canvas.create_line(100, 300, 500, 300)
+	delay = 33 # milliseconds	
 	canvas.after(delay, draw, canvas) # call this draw function with the canvas argument again after the delay
+
 if __name__ == "__main__":
 	root = Tkinter.Tk()
 	canvas = Tkinter.Canvas(root, width=SCREEN_SIZE, height=SCREEN_SIZE)
