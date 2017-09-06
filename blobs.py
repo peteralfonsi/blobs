@@ -12,7 +12,7 @@ COLOR_YELLOW = "#efef00"
 
 COLOR_ORANGE = "#ffa500"
 COLOR_GREEN = "#00ef00"
-COLOR_PURPLE = "#ef00ef"
+COLOR_PURPLE = "#bb00bb"
 
 COLOR_DEAD = "#eeddaa"
 
@@ -153,7 +153,11 @@ class Blob: # unfinished: food finding, eating, splitting, and purposeful motion
 				self.y_speed = -self.y_speed
 				other.x_speed = -other.x_speed
 				other.y_speed= -other.y_speed'''
-					
+				theta = math.atan2(other.y - self.y, other.x - self.x)
+				other.x += 2*math.cos(theta)
+				other.y += 2*math.sin(theta)
+				self.x -= 2*math.cos(theta)
+				self.x -= 2*math.sin(theta)
 				if (other.color == COLOR_BLUE and self.color == COLOR_RED) or (other.color == COLOR_RED and self.color == COLOR_BLUE):
 					self.color = COLOR_PURPLE
 					other.color = COLOR_PURPLE
