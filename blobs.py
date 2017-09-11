@@ -214,7 +214,7 @@ class Blob(Floater): # unfinished: food finding, splitting
 				elif opposite_color(self.color) == other.color:
 					#opposite colors kill each other
 					smaller(other, self).die() #is it possible to use smaller() to return the larger object or would i need a larger() function?
-				if self.diseased == True or other.diseased == True: 
+				if (self.diseased == True or other.diseased == True) and self.dead == False and other.dead == False: 
 					other.diseased = True
 					self.diseased = True
 					other.color = COLOR_DISEASE
@@ -333,7 +333,7 @@ def draw(canvas):
 		food.update()
 		food.draw(canvas)
 	for blob in blobs:
-		if blob.exists == True: #lmao @ efficiency
+		if blob.exists == True: #stays until i can fix the blob failing to delete itself issue
 			blob.update()
 			blob.draw(canvas)
 	delay = 33 # milliseconds	
@@ -344,6 +344,6 @@ if __name__ == "__main__":
 	canvas = Tkinter.Canvas(root, width=SCREEN_SIZE, height=SCREEN_SIZE)
 	canvas.pack()
 
-	root.bind('<Button-1>', addBlob) #for some reason, clicking triggers a shift in current direction??
+	root.bind('<Button-1>', addBlob)
 	draw(canvas)
 	root.mainloop()
