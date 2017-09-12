@@ -3,6 +3,7 @@ import random
 import math
 
 blobs = []
+blobs_to_update = []
 foods = []
 disease_regions = []
 
@@ -38,7 +39,7 @@ SCREEN_SIZE = 800
 CURRENT_DIR_STDEV = 0.1 # standard deviation for change in angle of current each frame (mean is 0)
 CURRENT_STRENGTH_STDEV = 0.2 # standard deviation for change in strength of current each frame (mean is 0)
 
-CURRENT_CORRECTION_STDEV = 0.3 #stdev for how much each (inanimate) object will deviate from the calculated value for motion given by the current and its size 
+CURRENT_CORRECTION_STDEV = 0.3 #stdev for how much each (inanimate) object will deviate from the calculated value for motion given by the current and its size
 MV_CURR_POWER = 1.5 #speed from current is proportional to size^x - i thought 2 would make sense at first but it would actually be less due to drag
 
 DECAY_TIME = 400 #avg time for dead blob to decay
@@ -56,7 +57,7 @@ DISEASE_LOC_RADIUS_MULT = 3 #how much bigger than blob.size is the radius of dis
 DISEASE_LOC_SPREAD_CHANCE = 40 #1/40 chance that the disease location spreads
 COLOR_DISEASE = ["#666699", "#b3b3cc"]
 COLOR_DISEASE_REG = ["#667399", "#a3abc2"]
-DISEASE_FOOD_CHANCE = 100
+DISEASE_FOOD_CHANCE = 500
 
 current = [(0.5-random.random())*5, (0.5-random.random())*5]
 
@@ -80,9 +81,9 @@ class Floater:
 		self.y_speed += current[1]/(self.density*self.size**MV_CURR_POWER) + random.gauss(0, CURRENT_CORRECTION_STDEV)
 		if self.x>=SCREEN_SIZE: #wraps around
 			self.x = 1
-		if self.x <= 0: 
+		if self.x <= 0:
 			self.x = SCREEN_SIZE - 1
-		if self.y>=SCREEN_SIZE: 
+		if self.y>=SCREEN_SIZE:
 			self.y = 1
 		if self.y <= 0:
 			self.y = SCREEN_SIZE - 1
@@ -135,12 +136,12 @@ class Blob(Floater): # unfinished: food finding, splitting
 		self.y_speed = 0 #(0.5-random.random())*0.5
 		if size == "random": #size is diameter, not radius
 			self.size = random.randint(6,10) #default (8,10)
-		else: 
+		else:
 			self.size = size
 		self.age = 0
 		if color == "random":
 			self.color = random.choice([COLOR_RED, COLOR_BLUE, COLOR_YELLOW])
-		else: 
+		else:
 			self.color = color
 		self.dead = False
 		self.food_timer = 0 #time since food
@@ -151,10 +152,10 @@ class Blob(Floater): # unfinished: food finding, splitting
 		self.moving_theta = 0
 		self.density = BLOB_DENSITY
 		self.exists = True
-		
+
 	def move_independent(self):
 			if self.finding_food == -1 and self.diseased == False:
-				for food in foods: 
+				for food in foods:
 					if is_touching(self, food, FOOD_LOCATING_RAD) == True:
 						self.finding_food = foods.index(food)
 			if self.move_period >= 0:
@@ -167,7 +168,7 @@ class Blob(Floater): # unfinished: food finding, splitting
 						if blob != self and is_touching(self, blob, FOOD_LOCATING_RAD):
 							self.moving_theta = math.atan2(blob.y - self.y, blob.x - self.x)
 
-				elif self.finding_food == -1: 
+				elif self.finding_food == -1:
 					for blob in blobs:
 						if is_touching(self, blob, FOOD_LOCATING_RAD) and opposite_color(self.color) == blob.color: #try to attack opposite color
 							self.moving_theta = math.atan2(blob.y - self.y, blob.x - self.x)
@@ -195,7 +196,7 @@ class Blob(Floater): # unfinished: food finding, splitting
 				self.move_period -= 1
 
 	def collide(self):
-		for other in blobs: 
+		for other in blobs:
 			if other.exists == True and self.exists == True and is_touching(self, other, 0) == True and blobs.index(other) > blobs.index(self):
 				theta = math.atan2(other.y - self.y, other.x - self.x)
 				other.x += 2*math.cos(theta)
@@ -214,7 +215,7 @@ class Blob(Floater): # unfinished: food finding, splitting
 				elif opposite_color(self.color) == other.color:
 					#opposite colors kill each other
 					smaller(other, self).die() #is it possible to use smaller() to return the larger object or would i need a larger() function?
-				if (self.diseased == True or other.diseased == True) and self.dead == False and other.dead == False: 
+				if (self.diseased == True or other.diseased == True) and self.dead == False and other.dead == False:
 					other.diseased = True
 					self.diseased = True
 					other.color = COLOR_DISEASE
@@ -254,7 +255,7 @@ class Blob(Floater): # unfinished: food finding, splitting
 	def update_dead(self):
 		self.decay_timer+=1
 		if self.decay_timer > DECAY_TIME + random.gauss(0, DECAY_STDEV): #decay
-			if self.diseased == True: 
+			if self.diseased == True:
 				disease_regions.append(Disease_Region(self.x, self.y, self.size*DISEASE_LOC_RADIUS_MULT))
 				if random.random() < 0.2:
 					blobs.append(Blob(self.x+5, self.y, True, self.color, "random")) #may remove
@@ -262,8 +263,6 @@ class Blob(Floater): # unfinished: food finding, splitting
 			for i in range(0, int(round(self.size/2))):
 				foods.append(Food(self.x + random.randint(-5, 5), self.y + random.randint(-5, 5))) #decays into food
 				self.exists = False
-				#blobs.remove(blobs[blobs.index(self)]) #this works for deleting food, why not blobs?
-				#print(blobs.index(self))
 
 	def update(self):
 		if self.dead == False:
@@ -332,11 +331,14 @@ def draw(canvas):
 	for food in foods:
 		food.update()
 		food.draw(canvas)
+	blobs_to_update = []
 	for blob in blobs:
-		if blob.exists == True: #stays until i can fix the blob failing to delete itself issue
+		if blob.exists == True:
+			blobs_to_update.append(blob)
+	for blob in blobs_to_update:
 			blob.update()
 			blob.draw(canvas)
-	delay = 33 # milliseconds	
+	delay = 33 # milliseconds
 	canvas.after(delay, draw, canvas) # call this draw function with the canvas argument again after the delay
 
 if __name__ == "__main__":
